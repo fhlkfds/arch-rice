@@ -1,0 +1,427 @@
+---
+- name: Configure local Arch Linux workstation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+
+  vars:
+    target_user: liam
+    target_home: "/home/liam"
+    smb_source: "//10.2.1.177/share"
+    smb_mountpoint: /share
+    smb_username: liam
+    smb_password: Mailmail@504
+    smb_credentials_file: /etc/samba/share-credentials
+    yay_config_file: "/home/liam/.config/yay/config.json"
+    doas_conf: |
+      permit persist liam as root
+    brave_extensions_policy: |
+      {
+        "ExtensionSettings": {
+          "*": {
+            "installation_mode": "allowed"
+          },
+
+          "nngceckbapebfimnlniiiahkandclblb": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "mmjbdbjnoablegbkcklggeknkfcjkjia": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "eimadpbcbfnmbkopoojfekhnkhdbieeh": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "ldpochfccmkkmhdbclfhpagapcfdljkj": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "pnidmkljnhbjfffciajlcpeldoljnidn": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "cnjifjpddelmedmihgijeibhnjfabmlf": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "pkehgijcmpdhfbdbbnkijodmdjhbjlgp": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "ghkdkllgoehcklnpajjjmfoaokabfdfm": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "gebbhagfogifgggkldgodflihgfeippi": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "mnjggcdmjocbbbhaepdhchncahnbgone": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "hjdoplcnndgiblooccencgcggcoihigg": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          },
+          "ddkjiahejlhfcafbddmgiahcphecmpfh": {
+            "installation_mode": "force_installed",
+            "update_url": "https://clients2.google.com/service/update2/crx"
+          }
+        }
+      }
+    pacman_requested_packages: >-
+      {{
+        lookup('file', playbook_dir ~ '/pacman.txt').splitlines()
+        | map('trim')
+        | reject('equalto', '')
+        | reject('match', '^#')
+        | unique
+        | list
+      }}
+    yay_requested_packages: >-
+      {{
+        lookup('file', playbook_dir ~ '/yay.txt').splitlines()
+        | map('trim')
+        | reject('equalto', '')
+        | reject('match', '^#')
+        | unique
+        | list
+      }}
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+  tasks:
+    - name: Get target user UID
+      ansible.builtin.command: "id -u {{ target_user }}"
+      register: target_uid_cmd
+      changed_when: false
+
+    - name: Get target user GID
+      ansible.builtin.command: "id -g {{ target_user }}"
+      register: target_gid_cmd
+      changed_when: false
+
+    - name: Set target user numeric IDs
+      ansible.builtin.set_fact:
+        target_uid: "{{ target_uid_cmd.stdout | trim }}"
+        target_gid: "{{ target_gid_cmd.stdout | trim }}"
+
+    - name: Fully update Arch Linux
+      ansible.builtin.command:
+        argv:
+          - pacman
+          - -Syu
+          - --noconfirm
+      register: pacman_upgrade
+      changed_when: >-
+        'there is nothing to do' not in
+        (((pacman_upgrade.stdout | default('')) ~ ' ' ~ (pacman_upgrade.stderr | default(''))) | lower)
+
+    - name: Install base prerequisites
+      ansible.builtin.package:
+        name:
+          - base-devel
+          - cifs-utils
+          - git
+          - go
+          - opendoas
+          - rsync
+        state: present
+
+    - name: Check whether yay is already installed
+      ansible.builtin.stat:
+        path: /usr/bin/yay
+      register: yay_binary
+
+    - name: Bootstrap yay from AUR when missing
+      when: not yay_binary.stat.exists
+      block:
+        - name: Create temporary build directory for yay
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: yay-bootstrap-
+          register: yay_build_dir
+          become_user: "{{ target_user }}"
+
+        - name: Clone yay-bin PKGBUILD
+          ansible.builtin.git:
+            repo: https://aur.archlinux.org/yay-bin.git
+            dest: "{{ yay_build_dir.path }}/yay-bin"
+            depth: 1
+            update: false
+          become_user: "{{ target_user }}"
+
+        - name: Build yay-bin package
+          ansible.builtin.command:
+            argv:
+              - makepkg
+              - -sf
+              - --noconfirm
+          args:
+            chdir: "{{ yay_build_dir.path }}/yay-bin"
+          become_user: "{{ target_user }}"
+          environment:
+            HOME: "{{ target_home }}"
+
+        - name: Find built yay package artifact
+          ansible.builtin.find:
+            paths: "{{ yay_build_dir.path }}/yay-bin"
+            patterns: "yay-bin-*.pkg.tar.*"
+            file_type: file
+          register: yay_pkg_files
+
+        - name: Install built yay package
+          ansible.builtin.command:
+            argv:
+              - pacman
+              - -U
+              - --noconfirm
+              - "{{ (yay_pkg_files.files | map(attribute='path') | sort | last) }}"
+
+        - name: Remove temporary yay build directory
+          ansible.builtin.file:
+            path: "{{ yay_build_dir.path }}"
+            state: absent
+
+    - name: Configure doas for target user
+      ansible.builtin.copy:
+        dest: /etc/doas.conf
+        content: "{{ doas_conf }}"
+        owner: root
+        group: root
+        mode: "0400"
+
+    - name: Ensure yay config directory exists
+      ansible.builtin.file:
+        path: "{{ target_home }}/.config/yay"
+        state: directory
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        mode: "0755"
+
+    - name: Check current yay configuration
+      ansible.builtin.stat:
+        path: "{{ yay_config_file }}"
+      register: yay_config_stat
+
+    - name: Read current yay configuration
+      ansible.builtin.slurp:
+        src: "{{ yay_config_file }}"
+      register: yay_config_slurp
+      when: yay_config_stat.stat.exists
+
+    - name: Parse current yay configuration
+      ansible.builtin.set_fact:
+        yay_current_config: >-
+          {{
+            (yay_config_slurp.content | b64decode | from_json)
+            if yay_config_stat.stat.exists else {}
+          }}
+
+    - name: Configure yay to use doas
+      ansible.builtin.command:
+        argv:
+          - yay
+          - --save
+          - --sudo
+          - doas
+          - --sudoflags
+          - ""
+      become_user: "{{ target_user }}"
+      environment:
+        HOME: "{{ target_home }}"
+        XDG_CONFIG_HOME: "{{ target_home }}/.config"
+      when:
+        - (yay_current_config.sudo | default('')) != 'doas'
+          or (yay_current_config.sudoflags | default('__missing__')) != ''
+
+    - name: Get all package names available from pacman repos
+      ansible.builtin.command:
+        argv:
+          - pacman
+          - -Slq
+      register: pacman_repo_names
+      changed_when: false
+
+    - name: Split requested package lists into pacman and yay sets
+      ansible.builtin.set_fact:
+        pacman_repo_packages: "{{ pacman_requested_packages | intersect(pacman_repo_names.stdout_lines | unique) }}"
+        pacman_fallback_to_yay: "{{ pacman_requested_packages | difference(pacman_repo_names.stdout_lines | unique) }}"
+        combined_yay_packages: "{{ (yay_requested_packages + (pacman_requested_packages | difference(pacman_repo_names.stdout_lines | unique))) | unique }}"
+
+    - name: Install packages available from pacman repositories
+      ansible.builtin.package:
+        name: "{{ pacman_repo_packages }}"
+        state: present
+      when: pacman_repo_packages | length > 0
+
+    - name: Get currently installed package names
+      ansible.builtin.command:
+        argv:
+          - pacman
+          - -Qq
+      register: installed_package_names
+      changed_when: false
+
+    - name: Compute missing packages that still need yay
+      ansible.builtin.set_fact:
+        yay_missing_packages: "{{ combined_yay_packages | difference(installed_package_names.stdout_lines | default([])) }}"
+
+    - name: Install packages from yay package set
+      ansible.builtin.command:
+        argv: "{{ ['yay', '-S', '--noconfirm', '--needed', '--answerclean', 'None', '--answerdiff', 'None'] + yay_missing_packages }}"
+      become_user: "{{ target_user }}"
+      environment:
+        HOME: "{{ target_home }}"
+        XDG_CONFIG_HOME: "{{ target_home }}/.config"
+      when: yay_missing_packages | length > 0
+
+    - name: Ensure target .config directory exists
+      ansible.builtin.file:
+        path: "{{ target_home }}/.config"
+        state: directory
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        mode: "0755"
+
+    - name: Deploy .config contents to target user
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/.config/"
+        dest: "{{ target_home }}/.config/"
+        remote_src: true
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        directory_mode: "0755"
+
+    - name: Deploy zsh configuration files
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: true
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        mode: "0644"
+      loop:
+        - src: "{{ playbook_dir }}/.zshrc"
+          dest: "{{ target_home }}/.zshrc"
+        - src: "{{ playbook_dir }}/.p10k.zsh"
+          dest: "{{ target_home }}/.p10k.zsh"
+
+    - name: Enforce ownership on deployed user configuration
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        recurse: "{{ item.recurse | default(false) }}"
+      loop:
+        - path: "{{ target_home }}/.config"
+          recurse: true
+        - path: "{{ target_home }}/.zshrc"
+        - path: "{{ target_home }}/.p10k.zsh"
+
+    - name: Ensure SMB support directories exist
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - path: /etc/samba
+          owner: root
+          group: root
+          mode: "0755"
+        - path: "{{ smb_mountpoint }}"
+          owner: root
+          group: root
+          mode: "0755"
+
+    - name: Install SMB credentials file
+      ansible.builtin.copy:
+        dest: "{{ smb_credentials_file }}"
+        content: |
+          username={{ smb_username }}
+          password={{ smb_password }}
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Install systemd mount unit for SMB share
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/share.mount
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=SMB share mounted at {{ smb_mountpoint }}
+          After=network-online.target
+          Wants=network-online.target
+
+          [Mount]
+          What={{ smb_source }}
+          Where={{ smb_mountpoint }}
+          Type=cifs
+          Options=credentials={{ smb_credentials_file }},uid={{ target_uid }},gid={{ target_gid }},file_mode=0644,dir_mode=0755,iocharset=utf8,vers=3.0,_netdev,nofail
+      notify: Reload systemd
+
+    - name: Install systemd automount unit for SMB share
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/share.automount
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Automount SMB share at {{ smb_mountpoint }}
+          After=network-online.target
+          Wants=network-online.target
+
+          [Automount]
+          Where={{ smb_mountpoint }}
+          TimeoutIdleSec=0
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reload systemd
+
+    - name: Flush systemd unit reload
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start SMB automount
+      ansible.builtin.systemd:
+        name: share.automount
+        enabled: true
+        state: started
+
+    - name: Mount SMB share now
+      ansible.builtin.systemd:
+        name: share.mount
+        state: started
+
+    - name: Ensure Brave managed policy directory exists
+      ansible.builtin.file:
+        path: /etc/brave/policies/managed
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Brave managed extensions policy
+      ansible.builtin.copy:
+        dest: /etc/brave/policies/managed/extensions.json
+        content: "{{ brave_extensions_policy }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+# Run:
+# ansible-playbook -i localhost, -c local site.yml --ask-become-pass
