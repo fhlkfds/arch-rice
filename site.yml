@@ -228,18 +228,17 @@
           }}
 
     - name: Configure yay to use doas
-      ansible.builtin.command:
-        argv:
-          - "{{ yay_binary_path }}"
-          - --save
-          - --sudo
-          - doas
-          - --sudoflags
-          - ""
-      become_user: "{{ target_user }}"
-      environment:
-        HOME: "{{ target_home }}"
-        XDG_CONFIG_HOME: "{{ target_home }}/.config"
+      ansible.builtin.copy:
+        dest: "{{ yay_config_file }}"
+        content: >-
+          {{
+            (yay_current_config | default({}))
+            | combine({'sudo': 'doas', 'sudoflags': ''}, recursive=True)
+            | to_nice_json
+          }}
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        mode: "0644"
       when:
         - yay_binary.stat.exists
         - (yay_current_config.sudo | default('')) != 'doas'
