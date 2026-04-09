@@ -331,6 +331,11 @@
         - src: "{{ playbook_dir }}/.p10k.zsh"
           dest: "{{ target_home }}/.p10k.zsh"
 
+    - name: Set zsh as default shell for target user
+      ansible.builtin.user:
+        name: "{{ target_user }}"
+        shell: /usr/bin/zsh
+
     - name: Enforce ownership on deployed user configuration
       ansible.builtin.file:
         path: "{{ item.path }}"
