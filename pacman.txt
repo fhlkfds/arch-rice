@@ -370,8 +370,6 @@ libqalculate
 libquadmath
 libraqm
 libraw1394
-librepods
-librepods-debug
 librest
 librsvg
 librsync
