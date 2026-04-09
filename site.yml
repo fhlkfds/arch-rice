@@ -343,6 +343,29 @@
         - path: "{{ target_home }}/.zshrc"
         - path: "{{ target_home }}/.p10k.zsh"
 
+    - name: Create standard XDG user directories
+      ansible.builtin.file:
+        path: "{{ target_home }}/{{ item }}"
+        state: directory
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        mode: "0755"
+      loop:
+        - Downloads
+        - Pictures
+        - Desktop
+        - Documents
+        - Videos
+
+    - name: Deploy wallpapers to Pictures directory
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/wallpapers/"
+        dest: "{{ target_home }}/Pictures/wallpapers/"
+        remote_src: true
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        directory_mode: "0755"
+
     - name: Ensure SMB support directories exist
       ansible.builtin.file:
         path: "{{ item.path }}"
