@@ -340,6 +340,33 @@
         group: "{{ target_user }}"
         directory_mode: "0755"
 
+    - name: Check if Oh My Zsh is already installed
+      ansible.builtin.stat:
+        path: "{{ target_home }}/.oh-my-zsh"
+      register: ohmyzsh_dir
+
+    - name: Install Oh My Zsh
+      ansible.builtin.shell:
+        cmd: sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+      environment:
+        RUNZSH: "no"
+        CHSH: "no"
+      become_user: "{{ target_user }}"
+      when: not ohmyzsh_dir.stat.exists
+
+    - name: Clone Powerlevel10k theme into Oh My Zsh custom themes
+      ansible.builtin.git:
+        repo: https://github.com/romkatv/powerlevel10k.git
+        dest: "{{ target_home }}/.oh-my-zsh/custom/themes/powerlevel10k"
+        depth: 1
+      become_user: "{{ target_user }}"
+
+    - name: Clone fzf-tab plugin into Oh My Zsh custom plugins
+      ansible.builtin.git:
+        repo: https://github.com/Aloxaf/fzf-tab.git
+        dest: "{{ target_home }}/.oh-my-zsh/custom/plugins/fzf-tab"
+      become_user: "{{ target_user }}"
+
     - name: Deploy zsh configuration files
       ansible.builtin.copy:
         src: "{{ item.src }}"
@@ -357,7 +384,7 @@
     - name: Set zsh as default shell for target user
       ansible.builtin.user:
         name: "{{ target_user }}"
-        shell: /usr/bin/zsh
+        shell: /bin/zsh
 
     - name: Enforce ownership on deployed user configuration
       ansible.builtin.file:
