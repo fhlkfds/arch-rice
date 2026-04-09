@@ -874,3 +874,4 @@ zoxide
 zram-generator
 zsh
 zstd
+spicetify-cli

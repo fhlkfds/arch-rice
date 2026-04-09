@@ -300,6 +300,29 @@
         - yay_binary.stat.exists
         - yay_missing_packages | length > 0
 
+    - name: Check if /opt/spotify exists
+      ansible.builtin.stat:
+        path: /opt/spotify
+      register: spotify_dir
+
+    - name: Set permissions on /opt/spotify
+      ansible.builtin.file:
+        path: /opt/spotify
+        mode: a+rw
+      when: spotify_dir.stat.exists
+
+    - name: Check if /opt/spotify/Apps exists
+      ansible.builtin.stat:
+        path: /opt/spotify/Apps
+      register: spotify_apps_dir
+
+    - name: Set permissions on /opt/spotify/Apps recursively
+      ansible.builtin.file:
+        path: /opt/spotify/Apps
+        mode: a+rw
+        recurse: true
+      when: spotify_apps_dir.stat.exists
+
     - name: Ensure target .config directory exists
       ansible.builtin.file:
         path: "{{ target_home }}/.config"
@@ -467,6 +490,20 @@
         owner: root
         group: root
         mode: "0644"
+
+    - name: Install Brave managed search and new tab policy
+      ansible.builtin.copy:
+        dest: /etc/brave/policies/managed/settings.json
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {
+            "DefaultSearchProviderEnabled": true,
+            "DefaultSearchProviderName": "Search",
+            "DefaultSearchProviderSearchURL": "https://search.social-network.work/?q={searchTerms}",
+            "NewTabPageLocation": "https://home.social-network.work/"
+          }
 
     - name: Enable and start SDDM
       ansible.builtin.systemd:
