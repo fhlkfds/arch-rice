@@ -233,7 +233,14 @@
         content: >-
           {{
             (yay_current_config | default({}))
-            | combine({'sudo': 'doas', 'sudoflags': ''}, recursive=True)
+            | combine(
+                {
+                  'sudobin': 'doas',
+                  'sudoflags': '',
+                  'pgpfetch': false
+                },
+                recursive=True
+              )
             | to_nice_json
           }}
         owner: "{{ target_user }}"
@@ -241,8 +248,9 @@
         mode: "0644"
       when:
         - yay_binary.stat.exists
-        - (yay_current_config.sudo | default('')) != 'doas'
+        - (yay_current_config.sudobin | default('')) != 'doas'
           or (yay_current_config.sudoflags | default('__missing__')) != ''
+          or (yay_current_config.pgpfetch | default(true)) != false
 
     - name: Get all package names available from pacman repos
       ansible.builtin.command:
@@ -274,11 +282,16 @@
 
     - name: Compute missing packages that still need yay
       ansible.builtin.set_fact:
-        yay_missing_packages: "{{ combined_yay_packages | difference(installed_package_names.stdout_lines | default([])) }}"
+        yay_missing_packages: >-
+          {{
+            combined_yay_packages
+            | reject('match', '.*-debug$')
+            | difference(installed_package_names.stdout_lines | default([]))
+          }}
 
     - name: Install packages from yay package set
       ansible.builtin.command:
-        argv: "{{ [yay_binary_path, '-S', '--noconfirm', '--needed', '--answerclean', 'None', '--answerdiff', 'None'] + yay_missing_packages }}"
+        argv: "{{ [yay_binary_path, '-S', '--noconfirm', '--needed', '--answerclean', 'None', '--answerdiff', 'None', '--mflags', '--skippgpcheck'] + yay_missing_packages }}"
       become_user: "{{ target_user }}"
       environment:
         HOME: "{{ target_home }}"
