@@ -159,11 +159,11 @@
             group: "{{ target_user }}"
             recurse: true
 
-        - name: Build and install yay
+        - name: Build yay package
           ansible.builtin.command:
             argv:
               - makepkg
-              - -si
+              - -f
               - --noconfirm
           args:
             chdir: "{{ yay_build_dir }}"
@@ -171,6 +171,21 @@
           environment:
             HOME: "{{ target_home }}"
             XDG_CONFIG_HOME: "{{ target_home }}/.config"
+
+        - name: Find built yay package artifact
+          ansible.builtin.find:
+            paths: "{{ yay_build_dir }}"
+            patterns: "yay-*.pkg.tar.*"
+            file_type: file
+          register: yay_pkg_files
+
+        - name: Install built yay package
+          ansible.builtin.command:
+            argv:
+              - pacman
+              - -U
+              - --noconfirm
+              - "{{ (yay_pkg_files.files | rejectattr('path', 'search', '-debug-') | map(attribute='path') | sort | last) }}"
 
     - name: Refresh yay installation status
       ansible.builtin.stat:
