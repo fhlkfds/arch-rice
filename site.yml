@@ -14,6 +14,7 @@
     smb_password: Mailmail@504
     smb_credentials_file: /etc/samba/share-credentials
     yay_config_file: "/home/liam/.config/yay/config.json"
+    yay_binary_path: /usr/bin/yay
     doas_conf: |
       permit persist liam as root
     brave_extensions_policy: |
@@ -137,7 +138,7 @@
 
     - name: Check whether yay is already installed
       ansible.builtin.stat:
-        path: /usr/bin/yay
+        path: "{{ yay_binary_path }}"
       register: yay_binary
 
     - name: Bootstrap yay from AUR when missing
@@ -184,11 +185,19 @@
               - -U
               - --noconfirm
               - "{{ (yay_pkg_files.files | map(attribute='path') | sort | last) }}"
-
+      always:
         - name: Remove temporary yay build directory
           ansible.builtin.file:
             path: "{{ yay_build_dir.path }}"
             state: absent
+          when:
+            - yay_build_dir is defined
+            - yay_build_dir.path is defined
+
+    - name: Refresh yay installation status
+      ansible.builtin.stat:
+        path: "{{ yay_binary_path }}"
+      register: yay_binary
 
     - name: Configure doas for target user
       ansible.builtin.copy:
@@ -228,7 +237,7 @@
     - name: Configure yay to use doas
       ansible.builtin.command:
         argv:
-          - yay
+          - "{{ yay_binary_path }}"
           - --save
           - --sudo
           - doas
@@ -239,6 +248,7 @@
         HOME: "{{ target_home }}"
         XDG_CONFIG_HOME: "{{ target_home }}/.config"
       when:
+        - yay_binary.stat.exists
         - (yay_current_config.sudo | default('')) != 'doas'
           or (yay_current_config.sudoflags | default('__missing__')) != ''
 
@@ -276,12 +286,14 @@
 
     - name: Install packages from yay package set
       ansible.builtin.command:
-        argv: "{{ ['yay', '-S', '--noconfirm', '--needed', '--answerclean', 'None', '--answerdiff', 'None'] + yay_missing_packages }}"
+        argv: "{{ [yay_binary_path, '-S', '--noconfirm', '--needed', '--answerclean', 'None', '--answerdiff', 'None'] + yay_missing_packages }}"
       become_user: "{{ target_user }}"
       environment:
         HOME: "{{ target_home }}"
         XDG_CONFIG_HOME: "{{ target_home }}/.config"
-      when: yay_missing_packages | length > 0
+      when:
+        - yay_binary.stat.exists
+        - yay_missing_packages | length > 0
 
     - name: Ensure target .config directory exists
       ansible.builtin.file:
