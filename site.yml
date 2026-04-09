@@ -17,7 +17,7 @@
     yay_binary_path: /usr/bin/yay
     yay_build_dir: /opt/yay
     doas_conf: |
-      permit nopass persist liam as root
+      permit nopass liam as root
     brave_extensions_policy: |
       {
         "ExtensionSettings": {

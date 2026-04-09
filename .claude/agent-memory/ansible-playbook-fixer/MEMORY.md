@@ -1,0 +1,1 @@
+- [project_arch_pc_overview.md](project_arch_pc_overview.md) — Arch Linux workstation Ansible playbook structure, key components, and common failure points
