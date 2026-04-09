@@ -874,4 +874,4 @@ zoxide
 zram-generator
 zsh
 zstd
-spicetify-cli
+linux-wallpaperengine-git

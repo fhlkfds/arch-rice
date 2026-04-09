@@ -291,7 +291,7 @@
 
     - name: Install packages from yay package set
       ansible.builtin.command:
-        argv: "{{ [yay_binary_path, '-S', '--noconfirm', '--needed', '--answerclean', 'None', '--answerdiff', 'None', '--mflags', '--skippgpcheck'] + yay_missing_packages }}"
+        argv: "{{ [yay_binary_path, '-S', '--noconfirm', '--needed', '--answerclean', 'All', '--answerdiff', 'None', '--mflags', '--skippgpcheck'] + yay_missing_packages }}"
       become_user: "{{ target_user }}"
       environment:
         HOME: "{{ target_home }}"
@@ -502,7 +502,8 @@
             "DefaultSearchProviderEnabled": true,
             "DefaultSearchProviderName": "Search",
             "DefaultSearchProviderSearchURL": "https://search.social-network.work/?q={searchTerms}",
-            "NewTabPageLocation": "https://home.social-network.work/"
+            "NewTabPageLocation": "https://home.social-network.work/",
+            "BraveThemeType": 1
           }
 
     - name: Enable and start SDDM
