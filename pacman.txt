@@ -864,6 +864,7 @@ xz
 yay
 yay-debug
 yyjson
+yt-dlp
 zathura
 zeromq
 zimg

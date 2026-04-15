@@ -53,6 +53,7 @@ cdparanoia
 cifs-utils
 cli11
 cliphist
+claude-code
 cmake
 coreutils
 cpio
@@ -538,6 +539,7 @@ obsidian
 ocl-icd
 oniguruma
 openal
+openai-codex
 opencore-amr
 opendoas
 openh264
