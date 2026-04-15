@@ -77,6 +77,8 @@ device-mapper
 diffutils
 dnsmasq
 double-conversion
+docker
+docker-compose
 dtc
 duktape
 e2fsprogs
